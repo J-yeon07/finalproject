@@ -2,58 +2,22 @@ import streamlit as st
 import pdfplumber
 import pandas as pd
 
-st.title("📄 PDF 표 ➝ CSV 변환기 (개별 표 제목 기반 저장)")
+st.title("📄 PDF 표 ➝ CSV 변환기 (디버깅 모드)")
 
 uploaded_file = st.file_uploader("PDF 파일을 업로드하세요", type="pdf")
 
-def extract_table_with_title(table):
-    """
-    표에서 제목과 본문 데이터를 분리합니다.
-    왼쪽 상단 셀을 제목으로 사용하고, 나머지 행은 데이터로 처리.
-    """
-    title = table[0][0] if table[0] and table[0][0] else "제목없음"
-
-    # 실제 데이터는 제목 이후 행부터 시작
-    data_rows = table[1:]
-    if not data_rows:
-        return title, None
-
-    # 열 이름은 연도 (2013~2022)
-    columns = ["구분"] + [str(year) for year in range(2013, 2023)]
-
-    try:
-        df = pd.DataFrame(data_rows, columns=columns)
-        return title.strip(), df
-    except Exception as e:
-        return title.strip(), None
-
 if uploaded_file:
     with pdfplumber.open(uploaded_file) as pdf:
-        extracted_tables = []
-
-        for page in pdf.pages:
+        all_tables = []
+        for page_num, page in enumerate(pdf.pages):
             tables = page.extract_tables()
-            for table in tables:
-                if not table or len(table) < 2:
-                    continue
-                title, df = extract_table_with_title(table)
-                if df is not None:
-                    extracted_tables.append((title, df))
+            st.write(f"📄 {page_num+1}쪽에서 {len(tables)}개의 표 감지됨")
+            for table_num, table in enumerate(tables):
+                st.write(f"🔹 원본 표 {table_num+1}:")
+                st.write(table)  # 추출된 원시 데이터 확인
+                all_tables.append(table)
 
-        if extracted_tables:
-            st.success(f"{len(extracted_tables)}개의 표가 추출되었습니다.")
-
-            for i, (title, df) in enumerate(extracted_tables):
-                st.markdown(f"### 📊 {i+1}. {title}")
-                st.dataframe(df)
-
-                csv = df.to_csv(index=False).encode('utf-8')
-                safe_title = title.replace(" ", "_").replace("/", "-").replace("\\", "-")
-                st.download_button(
-                    label=f"📥 '{title}' CSV 다운로드",
-                    data=csv,
-                    file_name=f"{safe_title}.csv",
-                    mime='text/csv'
-                )
+        if not all_tables:
+            st.warning("⚠️ 어떤 페이지에서도 표를 감지하지 못했습니다.")
         else:
-            st.warning("추출 가능한 표가 없습니다.")
+            st.success("표 추출 성공. 위의 표 원본 데이터를 확인하세요.")
